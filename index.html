@@ -148,9 +148,10 @@ function totalSteps(){return state.meter*SUBDIV[state.gridKey];}
 function resizePattern(){
   const n=totalSteps();
   NAMES.forEach(name=>{
-    const arr=state.pattern[name];
-    if(arr.length<n){while(arr.length<n)arr.push(false);}
-    else if(arr.length>n){arr.length=n;}
+    const old=state.pattern[name]||[];
+    const arr=new Array(n);
+    for(let i=0;i<n;i++)arr[i]=!!old[i];
+    state.pattern[name]=arr;
   });
 }
 
@@ -181,7 +182,7 @@ function makeDriveCurve(amount){
 
 function playKick(ctx,dest,time,p){
   const nodes=p.envNodes;
-  const tuneMul=Math.pow(2,(p.tune-50)/50/12);
+  const tuneMul=Math.pow(2,(p.tune-50)/50);
   const osc=ctx.createOscillator();osc.type='sine';
   const gain=ctx.createGain();
   const lastT=nodes[nodes.length-1][0]/1000;
@@ -583,21 +584,31 @@ function renderPatternPage(){
   const gridCard=el('section','card');
   gridCard.appendChild(el('div','label','PATTERN'));
   const n=totalSteps();
+  const perRow=8;
+  const numRows=Math.ceil(n/perRow);
   NAMES.forEach(name=>{
     const row=el('div','steprow');
     row.appendChild(el('div','name',name));
-    const cells=el('div','stepcells');
-    cells.style.gridTemplateColumns='repeat('+n+',1fr)';
-    state.pattern[name].forEach((on,i)=>{
-      const beatGroup=Math.floor(i/SUBDIV[state.gridKey])%2===0;
-      const bg=on?'var(--orange)':(beatGroup?'var(--panel3)':'var(--panel)');
-      const cell=el('button','stepcell');
-      cell.dataset.step=i;
-      cell.style.background=bg;
-      cell.onclick=()=>{state.pattern[name][i]=!state.pattern[name][i];renderPatternPage();};
-      cells.appendChild(cell);
-    });
-    row.appendChild(cells);
+    for(let r=0;r<numRows;r++){
+      const start=r*perRow;
+      const count=Math.min(perRow,n-start);
+      const cells=el('div','stepcells');
+      cells.style.gridTemplateColumns='repeat('+count+',1fr)';
+      cells.style.marginBottom='3px';
+      for(let j=0;j<count;j++){
+        const i=start+j;
+        const on=state.pattern[name][i];
+        const beatGroup=Math.floor(i/SUBDIV[state.gridKey])%2===0;
+        const bg=on?'var(--orange)':(beatGroup?'var(--panel3)':'var(--panel)');
+        const cell=el('button','stepcell');
+        cell.dataset.step=i;
+        cell.style.background=bg;
+        cell.style.height='30px';
+        cell.onclick=()=>{state.pattern[name][i]=!state.pattern[name][i];renderPatternPage();};
+        cells.appendChild(cell);
+      }
+      row.appendChild(cells);
+    }
     gridCard.appendChild(row);
   });
   page.appendChild(gridCard);
@@ -619,7 +630,7 @@ const VOICE_META={
 };
 function envNodesFor(inst){return inst==='Kick'?state.kick.envNodes:state.snare.envNodes;}
 
-function makeKnobEl(k,paramObj){
+function makeKnobEl(k,paramObj,onChange){
   const wrap=el('div','knobwrap');
   const knob=el('div','knob');
   const ind=el('div','ind');knob.appendChild(ind);
@@ -639,6 +650,7 @@ function makeKnobEl(k,paramObj){
       const delta=(startY-ev.clientY)*(k.max/120);
       paramObj[k.key]=Math.max(0,Math.min(k.max,Math.round(startVal+delta)));
       update();
+      if(onChange)onChange();
     }
     knob.addEventListener('pointermove',mv);
     knob.addEventListener('pointerup',()=>knob.removeEventListener('pointermove',mv),{once:true});
@@ -708,6 +720,7 @@ function renderVoicePage(){
             if(i<nodes.length-1)x=Math.min(nodes[i+1][0]-10,x);
             nodes[i]=[xToTime(x)===0&&i===0?0:Math.round(xToTime(x)),Math.round(yToFreq(y))];
             draw();
+            if(typeof refreshWaveform==='function')refreshWaveform();
           }
           svg.addEventListener('pointermove',mv);
           svg.addEventListener('pointerup',()=>svg.removeEventListener('pointermove',mv),{once:true});
@@ -753,7 +766,12 @@ function renderVoicePage(){
   const knobCard=el('section','card');
   knobCard.appendChild(el('div','label',currentVoiceInst.toUpperCase()+' KNOBS'));
   const knobGrid=el('div','knobgrid');
-  meta.knobs.forEach(k=>knobGrid.appendChild(makeKnobEl(k,params)));
+  let waveDebounce=null;
+  function refreshWaveform(){
+    clearTimeout(waveDebounce);
+    waveDebounce=setTimeout(()=>renderWaveform(currentVoiceInst,waveSvg),120);
+  }
+  meta.knobs.forEach(k=>knobGrid.appendChild(makeKnobEl(k,params,refreshWaveform)));
   knobCard.appendChild(knobGrid);
   page.appendChild(knobCard);
 
