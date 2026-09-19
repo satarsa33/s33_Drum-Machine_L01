@@ -22,8 +22,8 @@
 
   .logo{background:var(--cream);border-radius:14px;padding:12px 10px 8px;text-align:center;position:relative;border:2px solid #00000030;margin-bottom:14px;}
   .logo .led{position:absolute;top:12px;right:16px;width:9px;height:9px;border-radius:50%;background:var(--red);}
-  .logo h1{margin:0;font-size:36px;font-weight:700;color:var(--orange);-webkit-text-stroke:1.5px var(--panel);letter-spacing:1px;}
-  .logo p{margin:0;font-size:10px;font-weight:700;letter-spacing:3px;color:var(--panel);}
+  .logo h1{margin:0;font-size:30px;font-weight:700;color:var(--orange);-webkit-text-stroke:1.5px var(--panel);letter-spacing:1px;}
+  .logo p{margin:2px 0 0;font-size:15px;font-weight:700;letter-spacing:2px;color:var(--panel);}
 
   .page{display:none;}
   .page.active{display:block;}
@@ -78,8 +78,8 @@
 
   <div class="logo">
     <div class="led"></div>
-    <h1>S33</h1>
-    <p>DRUM MACHINE — L01</p>
+    <h1>S33 - DM L01</h1>
+    <p>DRUM MACHINE</p>
   </div>
 
   <!-- PAGE: PATTERN -->
@@ -141,7 +141,8 @@ const state={
   clap:{spread:8,decay:60,tone:1700},
   mix:{Kick:{vol:100,mute:false,solo:false},Snare:{vol:90,mute:false,solo:false},Hat:{vol:75,mute:false,solo:false},Clap:{vol:80,mute:false,solo:false}},
   master:102,
-  exportBars:4
+  exportBars:4,
+  fx:{drive:20,comp:30,delayMix:15,delayDiv:'1/8',delayFeedback:25,reverbMix:15,reverbSize:40}
 };
 
 function totalSteps(){return state.meter*SUBDIV[state.gridKey];}
@@ -178,6 +179,50 @@ function makeDriveCurve(amount){
     curve[i]=Math.tanh(k*x)/norm;
   }
   return curve;
+}
+function createImpulse(ctx,duration,decay){
+  const rate=ctx.sampleRate;
+  const length=Math.max(1,Math.floor(rate*duration));
+  const impulse=ctx.createBuffer(2,length,rate);
+  for(let c=0;c<2;c++){
+    const data=impulse.getChannelData(c);
+    for(let i=0;i<length;i++){
+      data[i]=(Math.random()*2-1)*Math.pow(1-i/length,decay);
+    }
+  }
+  return impulse;
+}
+const DELAY_DIV={'1/4':1,'1/8':0.5,'1/8T':1/3,'1/16':0.25};
+/* Costruisce la catena FX master (comp -> drive -> [dry + send delay + send reverb] -> destination).
+   Riusata sia in tempo reale sia negli export offline. Ritorna i riferimenti ai nodi per aggiornamenti live. */
+function buildFxChain(ctx,inputNode,fx,bpm){
+  const comp=ctx.createDynamicsCompressor();
+  const amt=fx.comp/100;
+  comp.threshold.value=-amt*30;
+  comp.ratio.value=1+amt*7;
+  comp.attack.value=0.003;comp.release.value=0.25;
+  inputNode.connect(comp);
+
+  const shaper=ctx.createWaveShaper();
+  shaper.curve=makeDriveCurve(fx.drive/100);
+  comp.connect(shaper);
+
+  shaper.connect(ctx.destination);
+
+  const delayNode=ctx.createDelay(1.5);
+  delayNode.delayTime.value=Math.min(1.4,(60/bpm)*DELAY_DIV[fx.delayDiv]);
+  const fbGain=ctx.createGain();fbGain.gain.value=(fx.delayFeedback/100)*0.85;
+  const delayWet=ctx.createGain();delayWet.gain.value=fx.delayMix/100;
+  shaper.connect(delayNode);
+  delayNode.connect(fbGain);fbGain.connect(delayNode);
+  delayNode.connect(delayWet);delayWet.connect(ctx.destination);
+
+  const convolver=ctx.createConvolver();
+  convolver.buffer=createImpulse(ctx,0.3+fx.reverbSize/100*3.2,2.0);
+  const reverbWet=ctx.createGain();reverbWet.gain.value=fx.reverbMix/100;
+  shaper.connect(convolver);convolver.connect(reverbWet);reverbWet.connect(ctx.destination);
+
+  return {comp,shaper,delayNode,fbGain,delayWet,convolver,reverbWet};
 }
 
 function playKick(ctx,dest,time,p){
@@ -311,13 +356,13 @@ function playInstrument(name,ctx,dest,time){
 }
 
 /* ===== AUDIO CONTEXT REAL-TIME + SCHEDULER ===== */
-let audioCtx=null, masterGain=null, instGains={};
+let audioCtx=null, masterGain=null, instGains={}, fxNodes=null;
 function initAudio(){
   if(audioCtx)return;
   audioCtx=new (window.AudioContext||window.webkitAudioContext)();
   masterGain=audioCtx.createGain();
   masterGain.gain.value=state.master/127;
-  masterGain.connect(audioCtx.destination);
+  fxNodes=buildFxChain(audioCtx,masterGain,state.fx,state.bpm);
   NAMES.forEach(name=>{
     const g=audioCtx.createGain();
     g.gain.value=state.mix[name].vol/127;
@@ -437,9 +482,10 @@ async function exportLoopWav(bars){
     if(i%2===1)dur*=(1+swingAmt*0.6);else dur*=(1-swingAmt*0.2);
     t+=dur;
   }
-  const totalDur=t+1.0;
+  const totalDur=t+1.0+(state.fx.reverbSize/100*3.2);
   const offlineCtx=new OfflineAudioContext(2,Math.ceil(44100*totalDur),44100);
-  const mg=offlineCtx.createGain();mg.gain.value=state.master/127;mg.connect(offlineCtx.destination);
+  const mg=offlineCtx.createGain();mg.gain.value=state.master/127;
+  buildFxChain(offlineCtx,mg,state.fx,state.bpm);
   const gains={};
   NAMES.forEach(name=>{const g=offlineCtx.createGain();g.gain.value=state.mix[name].vol/127;g.connect(mg);gains[name]=g;});
   for(let i=0;i<totalStepsAll;i++){
@@ -872,6 +918,57 @@ function renderMixPage(){
   };
   masterCard.appendChild(masterSlider);
   page.appendChild(masterCard);
+
+  const fxCard=el('section','card');
+  fxCard.appendChild(el('div','label','FX'));
+  function fxSlider(labelText,min,max,value,unit,onInput){
+    const wrap=el('div','sliderrow');
+    const lab=el('div','sliderlabel');
+    const spanV=el('span','',value+unit);
+    lab.appendChild(el('span','',labelText));lab.appendChild(spanV);
+    const input=el('input');input.type='range';input.min=min;input.max=max;input.value=value;
+    input.oninput=()=>{spanV.textContent=input.value+unit;onInput(parseFloat(input.value));};
+    wrap.appendChild(lab);wrap.appendChild(input);
+    return wrap;
+  }
+  fxCard.appendChild(fxSlider('DRIVE',0,100,state.fx.drive,'%',v=>{
+    state.fx.drive=v;
+    if(fxNodes)fxNodes.shaper.curve=makeDriveCurve(v/100);
+  }));
+  fxCard.appendChild(fxSlider('COMPRESSOR',0,100,state.fx.comp,'%',v=>{
+    state.fx.comp=v;
+    if(fxNodes){fxNodes.comp.threshold.value=-(v/100)*30;fxNodes.comp.ratio.value=1+(v/100)*7;}
+  }));
+
+  fxCard.appendChild(el('div','label','DELAY'));
+  fxCard.appendChild(fxSlider('Mix',0,100,state.fx.delayMix,'%',v=>{
+    state.fx.delayMix=v;if(fxNodes)fxNodes.delayWet.gain.value=v/100;
+  }));
+  const delayDivRow=el('div','grid4');delayDivRow.style.marginBottom='10px';
+  Object.keys(DELAY_DIV).forEach(dv=>{
+    const b=el('button','btn'+(state.fx.delayDiv===dv?' active':''),dv);
+    b.style.fontSize='10px';
+    b.onclick=()=>{
+      state.fx.delayDiv=dv;
+      if(fxNodes)fxNodes.delayNode.delayTime.value=Math.min(1.4,(60/state.bpm)*DELAY_DIV[dv]);
+      renderMixPage();
+    };
+    delayDivRow.appendChild(b);
+  });
+  fxCard.appendChild(delayDivRow);
+  fxCard.appendChild(fxSlider('Feedback',0,90,state.fx.delayFeedback,'%',v=>{
+    state.fx.delayFeedback=v;if(fxNodes)fxNodes.fbGain.gain.value=(v/100)*0.85;
+  }));
+
+  fxCard.appendChild(el('div','label','REVERB'));
+  fxCard.appendChild(fxSlider('Mix',0,100,state.fx.reverbMix,'%',v=>{
+    state.fx.reverbMix=v;if(fxNodes)fxNodes.reverbWet.gain.value=v/100;
+  }));
+  fxCard.appendChild(fxSlider('Size',0,100,state.fx.reverbSize,'%',v=>{
+    state.fx.reverbSize=v;
+    if(fxNodes&&audioCtx)fxNodes.convolver.buffer=createImpulse(audioCtx,0.3+v/100*3.2,2.0);
+  }));
+  page.appendChild(fxCard);
 
   const exportCard=el('section','card');
   exportCard.appendChild(el('div','label','EXPORT'));
