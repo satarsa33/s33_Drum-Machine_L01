@@ -108,24 +108,24 @@ const SILENT="................";
 
 // Ogni pattern è a 16 step (4/4, grid 1/16). Generi "house family" usano Clap, gli altri Snare.
 const PRESETS={
-  "House":         {bpm:124,swing:8,  kick:"X...X...X...X...",snare:SILENT,               clap:"....X.......X...",hat:".X.X.X.X.X.X.X.X"},
-  "Deep House":    {bpm:122,swing:14, kick:"X...X...X...X...",snare:SILENT,               clap:"....x.......X...",hat:"..X...X...X...X."},
-  "Disco":         {bpm:122,swing:6,  kick:"X...X...X...X...",snare:SILENT,               clap:"....X.......X...",hat:"X.X.X.X.X.X.X.X."},
-  "Afro House":    {bpm:122,swing:16, kick:"X..XX...X..X....",snare:SILENT,               clap:"..x.X...x...X...",hat:"X.XX.X.XX.X.XX.X"},
-  "Techno":        {bpm:130,swing:2,  kick:"X...X...X...X...",snare:"........X.......",clap:SILENT,hat:"XXXXXXXXXXXXXXXX"},
-  "Trance":        {bpm:138,swing:4,  kick:"X...X...X...X...",snare:"....X.......X...",clap:SILENT,hat:".X.X.X.X.X.X.X.X"},
+  "House":         {bpm:124,swing:8,  kick:"X...X...X...X...",snare:SILENT,               clap:"....X.......X...",hat:"..X...X...X...X."},
+  "Deep House":    {bpm:122,swing:12, kick:"X...X...X...X...",snare:SILENT,               clap:"....X.......X...",hat:"..X...X...X...X."},
+  "Disco":         {bpm:122,swing:4,  kick:"X...X...X...X...",snare:SILENT,               clap:"....X.......X...",hat:"X.X.X.X.X.X.X.X."},
+  "Afro House":    {bpm:122,swing:16, kick:"X.....X.X.....X.",snare:SILENT,               clap:"....X.....X.....",hat:"X.XX.X.X.XX.X.XX"},
+  "Techno":        {bpm:130,swing:2,  kick:"X...X...X...X...",snare:"............X...",clap:SILENT,hat:"XXXXXXXXXXXXXXXX"},
+  "Trance":        {bpm:138,swing:4,  kick:"X...X...X...X...",snare:"....X.......X...",clap:SILENT,hat:"..X...X...X...X."},
   "Big Room":      {bpm:128,swing:0,  kick:"X...X...X...X...",snare:SILENT,               clap:"....X.......X...",hat:"..X...X...X...X."},
-  "Hard Style":    {bpm:150,swing:0,  kick:"X...X...X...X...",snare:"....X.......X...",clap:SILENT,hat:"X.X.X.X.X.X.X.X."},
-  "Breakbeat":     {bpm:136,swing:10, kick:"X.....X..X......",snare:"....X......X....",clap:SILENT,hat:"X.X.XX.XX.X.XX.X"},
-  "Electro":       {bpm:128,swing:6,  kick:"X..X....X..X....",snare:"....X.......X...",clap:SILENT,hat:".X.X.X.X.X.X.X.X"},
-  "UK Garage":     {bpm:132,swing:20, kick:"X....X..X...X...",snare:SILENT,               clap:"..X.X....X.X....",hat:".X.X.X.X.X.X.X.X"},
-  "Drum & Bass":   {bpm:174,swing:4,  kick:"X.......x..X....",snare:"........X.......",clap:SILENT,hat:"X.X.X.X.X.X.X.X."},
-  "Jungle":        {bpm:168,swing:8,  kick:"X....x.X...x.X..",snare:"........X....X..",clap:SILENT,hat:"X.XXX.X.X.XXX.X."},
-  "Boom Bap":      {bpm:92, swing:58, kick:"X.....X....X....",snare:"....X.......X...",clap:SILENT,hat:"X.X.X.X.X.X.X.X."},
-  "Trap":          {bpm:140,swing:0,  kick:"X.......X..X....",snare:"........X.......",clap:SILENT,hat:"X.X.XXX.X.X.XXX."},
-  "Dubstep":       {bpm:140,swing:0,  kick:"X...........x...",snare:"........X.......",clap:SILENT,hat:"..X...X...X...X."},
-  "Reggaeton":     {bpm:96, swing:4,  kick:"X...x.X...X.x...",snare:SILENT,               clap:"..X...X...X...X.",hat:"X.X.X.X.X.X.X.X."},
-  "80s Pop":       {bpm:118,swing:4,  kick:"X.......X.......",snare:SILENT,               clap:"....X.......X...",hat:"X.X.X.X.X.X.X.X."}
+  "Hard Style":    {bpm:150,swing:0,  kick:"X...X...X...X...",snare:"....X.......X...",clap:SILENT,hat:"..X...X...X...X."},
+  "Breakbeat":     {bpm:136,swing:10, kick:"X.....X...X.....",snare:"....X.......X...",clap:SILENT,hat:"X.XX..X.XX.XX.XX"},
+  "Electro":       {bpm:128,swing:6,  kick:"X..X....X..X....",snare:SILENT,               clap:"....X.......X...",hat:"..X...X...X...X."},
+  "UK Garage":     {bpm:132,swing:20, kick:"X.........X.....",snare:SILENT,               clap:"....X.......X...",hat:"..X..X..X..X..X."},
+  "Drum & Bass":   {bpm:174,swing:4,  kick:"X.........X.....",snare:"........X.......",clap:SILENT,hat:"..X...XX..X...XX"},
+  "Jungle":        {bpm:168,swing:8,  kick:"X..X..X...X..X..",snare:"....X....X....X.",clap:SILENT,hat:"X.XX.XX.XX.XX.X."},
+  "Boom Bap":      {bpm:92, swing:58, kick:"X.........X.....",snare:"....X.......X...",clap:SILENT,hat:"X.X.X.X.X.X.X.X."},
+  "Trap":          {bpm:140,swing:0,  kick:"X.........X..X..",snare:"........X.......",clap:SILENT,hat:"X.X.X.XXX.X.X.XX"},
+  "Dubstep":       {bpm:140,swing:0,  kick:"X............X..",snare:"........X.......",clap:SILENT,hat:"....X.X.....X.X."},
+  "Reggaeton":     {bpm:96, swing:4,  kick:"X.....X...X.....",snare:SILENT,               clap:"...X...X...X..X.",hat:"X.X.X.X.X.X.X.X."},
+  "80s Pop":       {bpm:118,swing:4,  kick:"X.........X.....",snare:SILENT,               clap:"....X.......X...",hat:"X.X.X.X.X.X.X.X."}
 };
 
 const SUBDIV={'1/8':2,'1/8T':3,'1/16':4,'1/16T':6,'1/32':8};
