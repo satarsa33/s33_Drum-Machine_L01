@@ -135,7 +135,7 @@ const state={
   bpm:120, swing:0, meter:4, gridKey:'1/16',
   pattern:{Kick:pat("X...X...X...X..."),Snare:pat(SILENT),Hat:pat(".X.X.X.X.X.X.X.X"),Clap:pat("....X.......X...")},
   currentPreset:'House',
-  kick:{shape:'Punch',envNodes:[[0,300],[80,90],[220,49]],tune:50,punch:65,subLevel:70,subGen:40,click:55,harm:30,drive:45},
+  kick:{shape:'Punch',envNodes:[[0,300],[80,90],[220,49]],tune:50,punch:65,subLevel:70,subGen:40,click:55,harm:30,drive:28},
   snare:{envNodes:[[0,400],[90,200],[300,180]],tune:220,decay:249,snap:84,tone:4000},
   hat:{tune:10500,delay:28,open:24},
   clap:{spread:8,decay:60,tone:1700},
@@ -228,34 +228,69 @@ function buildFxChain(ctx,inputNode,fx,bpm){
 function playKick(ctx,dest,time,p){
   const nodes=p.envNodes;
   const tuneMul=Math.pow(2,(p.tune-50)/50);
-  const osc=ctx.createOscillator();osc.type='sine';
-  const gain=ctx.createGain();
   const lastT=nodes[nodes.length-1][0]/1000;
   const ampDecay=Math.max(0.08,lastT);
-  osc.frequency.setValueAtTime(Math.max(20,nodes[0][1]*tuneMul),time);
-  for(let i=1;i<nodes.length;i++){
-    osc.frequency.exponentialRampToValueAtTime(Math.max(20,nodes[i][1]*tuneMul),time+nodes[i][0]/1000);
+  const totalDur=Math.max(0.05,lastT+0.05);
+
+  // Curva di pitch continua (interpolazione esponenziale tra i nodi) invece di pochi segmenti spigolosi
+  const curveLen=128;
+  const freqCurve=new Float32Array(curveLen);
+  for(let i=0;i<curveLen;i++){
+    const tt=(i/(curveLen-1))*totalDur*1000;
+    let f;
+    if(tt<=nodes[0][0])f=nodes[0][1];
+    else if(tt>=nodes[nodes.length-1][0])f=nodes[nodes.length-1][1];
+    else{
+      for(let s=0;s<nodes.length-1;s++){
+        if(tt>=nodes[s][0]&&tt<=nodes[s+1][0]){
+          const ratio=(tt-nodes[s][0])/(Math.max(1,nodes[s+1][0]-nodes[s][0]));
+          const f0=Math.max(1,nodes[s][1]),f1=Math.max(1,nodes[s+1][1]);
+          f=f0*Math.pow(f1/f0,ratio);
+          break;
+        }
+      }
+    }
+    freqCurve[i]=Math.max(20,f*tuneMul);
   }
+
+  const osc=ctx.createOscillator();osc.type='sine';
+  osc.frequency.setValueCurveAtTime(freqCurve,time,totalDur);
+
+  // Filtro passa-basso che segue il pitch, aggiunge corpo/risonanza analogica
   const punch=p.punch/100;
-  gain.gain.setValueAtTime(0.0001,time);
-  gain.gain.linearRampToValueAtTime(1,time+0.001+(1-punch)*0.015);
-  gain.gain.exponentialRampToValueAtTime(0.001,time+ampDecay+0.05);
-  osc.connect(gain);
-  if(p.drive>0){
+  const filter=ctx.createBiquadFilter();filter.type='lowpass';
+  filter.Q.value=1+punch*2.5;
+  filter.frequency.setValueAtTime(freqCurve[0]*2.4,time);
+  filter.frequency.exponentialRampToValueAtTime(Math.max(70,freqCurve[curveLen-1]*1.8),time+totalDur);
+
+  const ampGain=ctx.createGain();
+  ampGain.gain.setValueAtTime(0.0001,time);
+  ampGain.gain.linearRampToValueAtTime(1,time+0.001+(1-punch)*0.012);
+  ampGain.gain.exponentialRampToValueAtTime(0.0015,time+ampDecay+0.05);
+  osc.connect(filter);filter.connect(ampGain);
+
+  // Drive in parallelo (dry/wet) invece che in serie, per non perdere corpo nei bassi
+  const driveAmt=p.drive/100;
+  let mainOut=ampGain;
+  if(driveAmt>0.02){
     const shaper=ctx.createWaveShaper();
-    shaper.curve=makeDriveCurve(p.drive/100);
-    gain.connect(shaper);shaper.connect(dest);
-  }else{
-    gain.connect(dest);
+    shaper.curve=makeDriveCurve(driveAmt);
+    const wetGain=ctx.createGain();wetGain.gain.value=driveAmt;
+    const dryGain=ctx.createGain();dryGain.gain.value=1-driveAmt*0.5;
+    const sumNode=ctx.createGain();
+    ampGain.connect(dryGain);dryGain.connect(sumNode);
+    ampGain.connect(shaper);shaper.connect(wetGain);wetGain.connect(sumNode);
+    mainOut=sumNode;
   }
+  mainOut.connect(dest);
   osc.start(time);osc.stop(time+ampDecay+0.15);
 
   if(p.harm>0){
+    const harmCurve=freqCurve.map(f=>f*2);
     const osc2=ctx.createOscillator();osc2.type='triangle';
+    osc2.frequency.setValueCurveAtTime(harmCurve,time,totalDur);
     const g2=ctx.createGain();
-    osc2.frequency.setValueAtTime(nodes[0][1]*tuneMul*2,time);
-    osc2.frequency.exponentialRampToValueAtTime(Math.max(40,nodes[nodes.length-1][1]*tuneMul*2),time+ampDecay);
-    g2.gain.setValueAtTime((p.harm/100)*0.35,time);
+    g2.gain.setValueAtTime((p.harm/100)*0.32,time);
     g2.gain.exponentialRampToValueAtTime(0.001,time+ampDecay*0.6+0.02);
     osc2.connect(g2);g2.connect(dest);
     osc2.start(time);osc2.stop(time+ampDecay*0.6+0.08);
@@ -263,7 +298,7 @@ function playKick(ctx,dest,time,p){
   if(p.subLevel>0){
     const subOsc=ctx.createOscillator();subOsc.type='sine';
     const subGain=ctx.createGain();
-    const subFreq=Math.max(20,nodes[nodes.length-1][1]*tuneMul*0.5*(0.6+p.subGen/150));
+    const subFreq=Math.max(20,freqCurve[curveLen-1]*0.5*(0.6+p.subGen/150));
     subOsc.frequency.setValueAtTime(subFreq,time);
     subGain.gain.setValueAtTime((p.subLevel/100)*0.8,time);
     subGain.gain.exponentialRampToValueAtTime(0.001,time+ampDecay+0.1);
@@ -271,13 +306,23 @@ function playKick(ctx,dest,time,p){
     subOsc.start(time);subOsc.stop(time+ampDecay+0.15);
   }
   if(p.click>0){
+    // Rumore ad alta frequenza per il "click"
     const noiseSrc=ctx.createBufferSource();noiseSrc.buffer=getNoiseBuffer(ctx,0.02);
-    const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=2000;
+    const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=2200;
     const clickGain=ctx.createGain();
-    clickGain.gain.setValueAtTime((p.click/100)*0.6,time);
-    clickGain.gain.exponentialRampToValueAtTime(0.001,time+0.02);
+    clickGain.gain.setValueAtTime((p.click/100)*0.55,time);
+    clickGain.gain.exponentialRampToValueAtTime(0.001,time+0.018);
     noiseSrc.connect(hp);hp.connect(clickGain);clickGain.connect(dest);
-    noiseSrc.start(time);noiseSrc.stop(time+0.03);
+    noiseSrc.start(time);noiseSrc.stop(time+0.025);
+    // Tick sinusoidale acuto per definire meglio l'attacco
+    const tick=ctx.createOscillator();tick.type='sine';
+    tick.frequency.setValueAtTime(freqCurve[0]*2.8,time);
+    tick.frequency.exponentialRampToValueAtTime(freqCurve[0]*1.4,time+0.008);
+    const tickGain=ctx.createGain();
+    tickGain.gain.setValueAtTime((p.click/100)*0.4,time);
+    tickGain.gain.exponentialRampToValueAtTime(0.001,time+0.007);
+    tick.connect(tickGain);tickGain.connect(dest);
+    tick.start(time);tick.stop(time+0.01);
   }
 }
 
@@ -295,11 +340,12 @@ function playSnare(ctx,dest,time,p){
 
   const noiseSrc=ctx.createBufferSource();noiseSrc.buffer=getNoiseBuffer(ctx,decay+0.1);
   const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=Math.max(200,p.tone*0.4);
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=Math.min(12000,p.tone*2.2);
   const noiseGain=ctx.createGain();
   const snapAmt=p.snap/127;
   noiseGain.gain.setValueAtTime(0.3+snapAmt*0.7,time);
   noiseGain.gain.exponentialRampToValueAtTime(0.001,time+decay);
-  noiseSrc.connect(hp);hp.connect(noiseGain);noiseGain.connect(dest);
+  noiseSrc.connect(hp);hp.connect(lp);lp.connect(noiseGain);noiseGain.connect(dest);
   noiseSrc.start(time);noiseSrc.stop(time+decay+0.05);
 }
 
@@ -329,11 +375,14 @@ function playClap(ctx,dest,time,p){
   const decay=p.decay/1000;
   const tone=p.tone;
   for(let i=0;i<3;i++){
-    const t=time+i*spread;
+    const jitter=(Math.random()-0.5)*spread*0.3;
+    const t=time+i*spread+jitter;
     const src=ctx.createBufferSource();src.buffer=getNoiseBuffer(ctx,0.05);
-    const bp=ctx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=tone;bp.Q.value=1.5;
+    const bp=ctx.createBiquadFilter();bp.type='bandpass';
+    bp.frequency.value=tone*(0.94+Math.random()*0.12);
+    bp.Q.value=1.5;
     const g=ctx.createGain();
-    g.gain.setValueAtTime(0.6,t);
+    g.gain.setValueAtTime(0.55+Math.random()*0.1,t);
     g.gain.exponentialRampToValueAtTime(0.001,t+0.04);
     src.connect(bp);bp.connect(g);g.connect(dest);
     src.start(t);src.stop(t+0.05);
