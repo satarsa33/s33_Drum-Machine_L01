@@ -135,12 +135,12 @@ const state={
   bpm:120, swing:0, meter:4, gridKey:'1/16',
   pattern:{Kick:pat("X...X...X...X..."),Snare:pat(SILENT),Hat:pat(".X.X.X.X.X.X.X.X"),Clap:pat("....X.......X...")},
   currentPreset:'House',
-  kick:{shape:'Punch',envNodes:[[0,300],[80,90],[220,49]],tune:50,punch:65,subLevel:70,subGen:40,click:55,harm:30,drive:28},
+  kick:{shape:'Flat',envNodes:[[0,60],[60,55],[220,50]],tune:50,punch:65,subLevel:70,subGen:40,click:55,harm:30,drive:28},
   snare:{envNodes:[[0,400],[90,200],[300,180]],tune:220,decay:249,snap:84,tone:4000},
   hat:{tune:10500,delay:28,open:24},
   clap:{spread:8,decay:60,tone:1700},
-  mix:{Kick:{vol:100,mute:false,solo:false},Snare:{vol:90,mute:false,solo:false},Hat:{vol:75,mute:false,solo:false},Clap:{vol:80,mute:false,solo:false}},
-  master:102,
+  mix:{Kick:{vol:75,mute:false,solo:false},Snare:{vol:65,mute:false,solo:false},Hat:{vol:55,mute:false,solo:false},Clap:{vol:60,mute:false,solo:false}},
+  master:80,
   exportBars:4,
   fx:{drive:20,comp:30,delayMix:15,delayDiv:'1/8',delayFeedback:25,reverbMix:15,reverbSize:40}
 };
@@ -884,9 +884,9 @@ function renderVoicePage(){
 
 function applyKickShape(shape){
   const presets={
-    Punch:[[0,300],[80,90],[220,49]],
-    Deep:[[0,150],[120,60],[300,40]],
-    Hard:[[0,400],[40,120],[150,60]],
+    Punch:[[0,150],[18,60],[160,52]],
+    Deep:[[0,120],[140,55],[320,38]],
+    Hard:[[0,500],[35,80],[140,55]],
     Flat:[[0,60],[60,55],[220,50]]
   };
   state.kick.envNodes=presets[shape].map(n=>[n[0],n[1]]);
